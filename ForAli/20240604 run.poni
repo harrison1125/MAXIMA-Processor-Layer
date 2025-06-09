@@ -1,0 +1,14 @@
+# Nota: C-Order, 1 refers to the Y axis, 2 to the X axis
+# Calibration done on Thu Jun  5 20:16:12 2025
+poni_version: 2.1
+Detector: Eiger2CdTe_1M
+Detector_config: {"orientation": 3}
+Distance: 0.08841226768687305
+Poni1: 0.039890423525180956
+Poni2: 0.03783700319149772
+Rot1: -0.011304876233232746
+Rot2: -0.006470573693638689
+Rot3: 0.0
+Wavelength: 5.142438757080061e-11
+# Calibrant: alpha_Al2O3
+# Image: fabio:///Users/hpark108/Desktop/Immediate/Calibrants 2506_5_8_0001-01-01_00-00-00+00-00/scan_point_0.tiff
