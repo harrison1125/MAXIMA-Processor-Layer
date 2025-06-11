@@ -1,5 +1,6 @@
 import os
 import re
+import csv
 import matplotlib.pyplot as plt
 
 def calculate_atomic_percent_ti(ti_mass_fraction, cu_mass_fraction):
@@ -67,13 +68,23 @@ for dirpath, dirnames, filenames in os.walk(root_dir):
             plt.plot(sorted_points, ti_at_values, marker='^', color='purple', label='Ti Atomic Percent')
             plt.xlabel('Scan Point')
             plt.ylabel('Ti Atomic Percent (%)')
-            plt.title(f'Ti Atomic Percent - {base_name}')
+            plt.title(f'Ti Atomic Percent')
             plt.legend()
             plt.grid(True)
             plt.tight_layout()
 
-            output_png = os.path.join(dirpath, f"{base_name}_TiAtomicPercent.png")
+            output_png = os.path.join(dirpath, f"TiAtomicPercent.png")
             plt.savefig(output_png)
             plt.close()
+            print(f"  Saved plot: {output_png}") 
 
-            print(f"  Saved plot: {output_png}")
+            # === Write CSV with scan data ===
+            output_csv = os.path.join(dirpath, f"TiAtomicPercent.csv")
+            with open(output_csv, "w", newline="") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(["Scan Point", "Ti Mass Fraction", "Cu Mass Fraction", "Ti Atomic Percent"])
+                for sp in sorted_points:
+                    writer.writerow([sp, ti_mass[sp], cu_mass[sp], ti_at_percent[sp]])
+
+            print(f"  Saved CSV: {output_csv}")
+
