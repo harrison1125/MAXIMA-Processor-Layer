@@ -1,0 +1,51 @@
+import numpy as np
+import matplotlib.pyplot as plt
+
+# Paths to your .dat files
+dat_files = [
+    '/Users/hpark108/Desktop/Immediate/JHAMAC00001-S3R1C1_JHAMAC00001-S3R1C1_1_1_2025-09-25_20-58-50/scan_point_0.dat',
+    '/Users/hpark108/Desktop/Immediate/JHAMAC00001-S3R6C1_JHAMAC00001-S3R6C1_1_1_2025-09-25_21-48-17/scan_point_0.dat'
+]
+
+colors = ["orange", "green"]  # color coding
+
+plt.figure(figsize=(6, 5))
+
+# Normalization range
+q_min, q_max = 0, 60
+
+for file, color in zip(dat_files, colors): 
+    data = np.loadtxt(file, skiprows=1)  # skip header line
+    two_theta, intensity = data[:, 0], data[:, 1]
+    
+    # Find indices within normalization range
+    mask = (two_theta >= q_min) & (two_theta <= q_max)
+    
+    if np.any(mask):  # ensure range exists
+        max_val = np.max(intensity[mask])
+        if max_val > 0:
+            intensity = intensity / max_val  # normalize
+    else:
+        print(f"Warning: No data in range {q_min}–{q_max} for {file}")
+    
+    plt.plot(two_theta, intensity, lw=2, color=color)
+
+plt.xlabel(r"$Q$ (nm$^{-1}$)", fontsize=15) 
+
+plt.ylabel("Normalized Intensity", fontsize=15)
+
+# plt.yscale("log")
+plt.xlim(15, 65)
+plt.ylim(0, 1.05)
+plt.legend(['Cu - 0% Ti','Cu - 6% Ti'])
+plt.tick_params(axis='both', which='major', labelsize=15)
+plt.tick_params(axis='both', which='minor', labelsize=15)
+#plt.legend(fontsize=12)
+plt.tight_layout()
+
+# Save figure
+output_png = "/Users/hpark108/Desktop/Immediate/q-range-extremes-normalized.png"
+plt.savefig(output_png, dpi=150)
+plt.close()
+
+print(f"Saved: {output_png}")

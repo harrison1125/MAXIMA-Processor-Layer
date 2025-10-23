@@ -1,0 +1,170 @@
+# import os
+# import glob
+# import re
+# import numpy as np
+# import pandas as pd
+# import matplotlib.pyplot as plt
+
+# # Folder containing your .dat files
+# folder_path = '/Users/hpark108/Desktop/Immediate/20250930 updated XRF run/JHAMAC00001-S3R5C1_JHAMAC00001-S3R5C1_1_1_2025-09-29_17-59-03'
+# file_pattern = os.path.join(folder_path, 'scan_point_*.dat')
+# files = glob.glob(file_pattern)
+
+# # Function to extract numeric scan point for sorting
+# def extract_scan_number(file_path):
+#     match = re.search(r'scan_point_(\d+)\.dat', file_path)
+#     if match:
+#         return int(match.group(1))
+#     return -1
+
+# # Sort files based on numeric scan point
+# files = sorted(files, key=extract_scan_number)
+
+
+# files = files[0:26]
+# # Define x ranges for maxima
+# x_ranges = [(29, 32), (31.3,32), (34.25, 34.4), (40, 43), (45, 55), (55, 67)]
+
+# # Prepare results
+# results = []
+
+# for file in files:
+#     # Load data, skip header row
+#     data = np.loadtxt(file, skiprows=1)
+#     x = data[:, 0]
+#     y = data[:, 1]
+
+#     file_result = {'scan_point': os.path.basename(file)}
+
+#     for x_min, x_max in x_ranges:
+#         col_name = f'max_{x_min}_{x_max}'
+
+#         # Handle decreasing ranges
+#         if x_min > x_max:
+#             mask = (x >= x_max) & (x <= x_min)
+#         else:
+#             mask = (x >= x_min) & (x <= x_max)
+
+#         y_in_range = y[mask]
+
+#         if len(y_in_range) > 0:
+#             file_result[col_name] = np.max(y_in_range)
+#         else:
+#             file_result[col_name] = np.nan  # use NaN for plotting
+
+#     results.append(file_result)
+
+# # Convert to DataFrame and save to CSV
+# df = pd.DataFrame(results)
+# output_csv = 'maxima_results_by_column.csv'
+# df.to_csv(output_csv, index=False)
+# print(f'Results saved to {output_csv}')
+
+# # Plot maxima as a function of scan point
+# plt.figure(figsize=(10, 6))
+
+# scan_points = range(len(files))  # numeric x-axis for scan points
+# for x_min, x_max in x_ranges:
+#     col_name = f'max_{x_min}_{x_max}'
+#     plt.plot(scan_points, df[col_name], marker='o', label=f'{x_min}-{x_max}')
+
+# plt.xticks(scan_points, df['scan_point'], rotation=90)
+# plt.xlabel('Scan Point')
+# plt.ylabel('Maximum y in Range')
+# plt.title('Local Maxima at Each Range vs Scan Point')
+# plt.legend()
+# plt.tight_layout()
+# plt.grid(True)
+# plt.show()
+
+
+############################################################################
+import numpy as np
+import pandas as pd
+import glob
+import os
+import matplotlib.pyplot as plt
+import re
+
+# Folder containing your .dat files
+folder_path = '/Users/hpark108/Desktop/Immediate/20250930 updated XRF run/JHAMAC00001-S3R3C1_JHAMAC00001-S3R3C1_1_1_2025-09-29_18-51-46'
+file_pattern = os.path.join(folder_path, 'scan_point_*.dat')
+
+# Function to extract numeric scan point for sorting
+def extract_scan_number(file_path):
+    match = re.search(r'scan_point_(\d+)\.dat', file_path)
+    if match:
+        return int(match.group(1))
+    return -1
+
+# Sort files numerically
+files = sorted(glob.glob(file_pattern), key=extract_scan_number)
+
+# Define x ranges for maxima
+x_ranges = [(28.2,28.3),(29, 32), (31.3,32), (34.25, 34.3), (40, 43), (45, 55), (55, 67)]
+
+# Prepare results
+results = []
+
+files = files[4:31]
+for file in files:
+    data = np.loadtxt(file, skiprows=1)
+    x = data[:, 0]
+    y = data[:, 1]
+
+    file_result = {'scan_point': os.path.basename(file)}
+
+    for x_min, x_max in x_ranges:
+        col_name = f'max_{x_min}_{x_max}_2theta'
+
+        # Handle decreasing ranges
+        if x_min > x_max:
+            mask = (x >= x_max) & (x <= x_min)
+        else:
+            mask = (x >= x_min) & (x <= x_max)
+
+        x_in_range = x[mask]
+        y_in_range = y[mask]
+
+        if len(y_in_range) > 0:
+            max_index = np.argmax(y_in_range)
+            file_result[col_name] = x_in_range[max_index]
+        else:
+            file_result[col_name] = np.nan
+
+    results.append(file_result)
+
+# Convert to DataFrame and save CSV
+df = pd.DataFrame(results)
+output_csv = 'maxima_2theta_by_column.csv'
+df.to_csv(output_csv, index=False)
+print(f'Results saved to {output_csv}')
+
+# Plot each x-range separately on a grid
+num_ranges = len(x_ranges)
+cols = 2  # number of columns in grid
+rows = int(np.ceil(num_ranges / cols))
+
+fig, axes = plt.subplots(rows, cols, figsize=(12, 4 * rows))
+axes = axes.flatten()  # flatten in case of single row/column
+
+scan_points = range(len(files))  # numeric x-axis for scan points
+
+for i, (x_min, x_max) in enumerate(x_ranges):
+    col_name = f'max_{x_min}_{x_max}_2theta'
+    axes[i].plot(scan_points, df[col_name], marker='o', linestyle='-')
+    axes[i].set_xticks(scan_points)
+    axes[i].set_xticklabels(df['scan_point'], rotation=90)
+    axes[i].set_xlabel('Scan Point')
+    axes[i].set_ylabel('2θ at Maximum y')
+    axes[i].set_title(f'Range {x_min}-{x_max}')
+    axes[i].grid(True)
+
+# Hide any unused subplots
+for j in range(i + 1, len(axes)):
+    axes[j].axis('off')
+
+plt.tight_layout()
+plt.show()
+
+

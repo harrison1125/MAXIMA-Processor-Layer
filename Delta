@@ -1,0 +1,106 @@
+import numpy as np
+import matplotlib.pyplot as plt
+import os
+import glob
+import re
+
+# === Parameters ===
+data_dirs = [
+    '/Users/hpark108/Desktop/Immediate/20250930 updated XRF run/JHAMAC00001-S3R1C1_JHAMAC00001-S3R1C1_1_1_2025-09-29_19-42-34',
+    '/Users/hpark108/Desktop/Immediate/20250930 updated XRF run/JHAMAC00001-S3R2C1_JHAMAC00001-S3R2C1_1_1_2025-09-29_19-18-56',
+    '/Users/hpark108/Desktop/Immediate/20250930 updated XRF run/JHAMAC00001-S3R3C1_JHAMAC00001-S3R3C1_1_1_2025-09-29_18-51-46',
+    # '/Users/hpark108/Desktop/Immediate/20250930 updated XRF run/JHAMAC00001-S3R4C1_JHAMAC00001-S3R4C1_1_1_2025-09-29_18-27-12',
+    # '/Users/hpark108/Desktop/Immediate/20250930 updated XRF run/JHAMAC00001-S3R5C1_JHAMAC00001-S3R5C1_1_1_2025-09-29_17-59-03',
+    # '/Users/hpark108/Desktop/Immediate/20250930 updated XRF run/JHAMAC00001-S3R6C1_JHAMAC00001-S3R6C1_1_1_2025-09-29_17-28-24'
+]
+
+output_png = "/Users/hpark108/Desktop/Immediate/q-range-delta-waterfall.png"
+plot_every_n = 1
+offset_step = 10
+x_range = (25, 65)
+
+def numerical_sort(value):
+    numbers = re.findall(r'\d+', os.path.basename(value))
+    return [int(num) for num in numbers]
+
+# === First pass: find global Q range ===
+q_min, q_max = np.inf, -np.inf
+for i, dir_path in enumerate(data_dirs):
+    dat_files = sorted(glob.glob(os.path.join(dir_path, "**/*.[dD][aA][tT]"), recursive=True), key=numerical_sort)
+    
+    # Reverse order only for first two directories
+    if i < 2:
+        dat_files = list(reversed(dat_files))
+    
+    for file in dat_files[::plot_every_n]:
+        try:
+            data = np.loadtxt(file, skiprows=1)
+            q = data[:, 0]
+            q_min = min(q_min, q.min())
+            q_max = max(q_max, q.max())
+        except Exception:
+            continue
+
+# Define common uniform Q grid
+common_q = np.linspace(q_min, q_max, 1000)
+
+# === Second pass: load and interpolate ===
+all_data = []
+for i, dir_path in enumerate(data_dirs):
+    dat_files = sorted(glob.glob(os.path.join(dir_path, "**/*.[dD][aA][tT]"), recursive=True), key=numerical_sort)
+    
+    # Reverse order only for first two directories
+    if i < 2:
+        dat_files = list(reversed(dat_files))
+    
+    for file in dat_files[::plot_every_n]:
+        try:
+            data = np.loadtxt(file, skiprows=1)
+            q, intensity = data[:, 0], data[:, 1]
+            intensity_interp = np.interp(common_q, q, intensity)
+            all_data.append(intensity_interp)
+        except Exception as e:
+            print(f"Error reading {file}: {e}")
+
+if not all_data:
+    raise ValueError("❌ No valid .dat files found across all directories.")
+
+all_data = np.array(all_data)
+avg_intensity = np.mean(all_data, axis=0)
+
+# === Plot Δ = (I - avg) ===
+plt.figure(figsize=(12, 8))
+offset = 0
+colors = ['blue', 'orange', 'green', 'blue', 'orange', 'green']
+
+i_file = 0
+for i, dir_path in enumerate(data_dirs):
+    dat_files = sorted(glob.glob(os.path.join(dir_path, "**/*.[dD][aA][tT]"), recursive=True), key=numerical_sort)
+    
+    # Reverse order only for first two directories
+    if i < 3:
+        dat_files = list(reversed(dat_files))
+    
+    color = colors[i % len(colors)]
+
+    for file in dat_files[::plot_every_n]:
+        data = np.loadtxt(file, skiprows=1)
+        q, intensity = data[:, 0], data[:, 1]
+        intensity_interp = np.interp(common_q, q, intensity)
+        delta = intensity_interp - avg_intensity
+
+        plt.plot(common_q, delta + offset, lw=1.5, color=color)
+        offset += offset_step
+        i_file += 1
+
+plt.xlabel(r"$Q$ (nm$^{-1}$)", fontsize=15)
+plt.ylabel(r"$\Delta I(Q)$ + offset", fontsize=15)
+plt.xlim(*x_range)
+plt.yticks([])
+plt.tick_params(axis='x', labelsize=12)
+plt.tight_layout()
+
+plt.savefig(output_png, dpi=150)
+plt.close()
+
+print(f"✅ Saved ΔI(Q) waterfall plot: {output_png}")
