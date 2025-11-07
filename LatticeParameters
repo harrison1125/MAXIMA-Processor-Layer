@@ -1,0 +1,121 @@
+import os
+import glob
+import re
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import sklearn
+
+# ================= USER INPUTS =================
+folder_paths = [
+    '/Users/hpark108/Desktop/Immediate/20250930 updated XRF run/JHAMAC00001-S3R1C1_JHAMAC00001-S3R1C1_1_1_2025-09-29_19-42-34',
+    '/Users/hpark108/Desktop/Immediate/20250930 updated XRF run/JHAMAC00001-S3R2C1_JHAMAC00001-S3R2C1_1_1_2025-09-29_19-18-56',
+    '/Users/hpark108/Desktop/Immediate/20250930 updated XRF run/JHAMAC00001-S3R3C1_JHAMAC00001-S3R3C1_1_1_2025-09-29_18-51-46',
+    '/Users/hpark108/Desktop/Immediate/20250930 updated XRF run/JHAMAC00001-S3R4C1_JHAMAC00001-S3R4C1_1_1_2025-09-29_18-27-12',
+    '/Users/hpark108/Desktop/Immediate/20250930 updated XRF run/JHAMAC00001-S3R5C1_JHAMAC00001-S3R5C1_1_1_2025-09-29_17-59-03',
+    '/Users/hpark108/Desktop/Immediate/20250930 updated XRF run/JHAMAC00001-S3R6C1_JHAMAC00001-S3R6C1_1_1_2025-09-29_17-28-24'
+]
+
+# Scan points to include
+scan_slice = slice(4, 31)
+
+# Q ranges (in your Q-space units) and their Miller indices
+# You can freely adjust both lists as long as lengths match.
+x_ranges = [(29, 32), (34, 36), (47, 51), (56, 59), (59, 62)] 
+hkl_ranges = [(1, 1, 1), (2, 0, 0), (2, 2, 0), (3, 1, 1), (2, 2, 2)] 
+
+# ================= FUNCTIONS =================
+def extract_scan_number(file_path):
+    """Extract numeric scan point from filename."""
+    match = re.search(r'scan_point_(\d+)\.dat', file_path)
+    return int(match.group(1)) if match else -1
+
+
+from sklearn.linear_model import LinearRegression
+
+def process_folder(folder_path):
+    """Process one folder and calculate average lattice parameter using linear regression."""
+    file_pattern = os.path.join(folder_path, 'scan_point_*.dat')
+    files = sorted(glob.glob(file_pattern), key=extract_scan_number)
+    files = files[scan_slice]
+    if not files:
+        print(f"No .dat files found in {folder_path}. Skipping.")
+        return
+
+    results = []
+    for file in files:
+        data = np.loadtxt(file, skiprows=1)
+        x = data[:, 0]  # Q values
+        y = data[:, 1]  # intensity
+        file_result = {'scan_point': os.path.basename(file)}
+
+        # Find maxima in Q ranges
+        for n, (x_min, x_max) in enumerate(x_ranges):
+            if n >= len(hkl_ranges):
+                break
+            h, k, l = hkl_ranges[n]
+            col_name = f'max_{x_min}_{x_max}_Q'
+            mask = (x >= min(x_min, x_max)) & (x <= max(x_min, x_max))
+            if np.any(mask):
+                idx = np.argmax(y[mask])
+                file_result[col_name] = x[mask][idx]
+            else:
+                file_result[col_name] = np.nan
+        results.append(file_result)
+
+    df = pd.DataFrame(results)
+
+    # Compute d for each reflection
+    d_values = []
+    hkls = []
+    for n, (x_min, x_max) in enumerate(x_ranges):
+        if n >= len(hkl_ranges):
+            break
+        h, k, l = hkl_ranges[n]
+        q_col = f'max_{x_min}_{x_max}_Q'
+        d_col = f'd_nm_{x_min}_{x_max}'
+        df[d_col] = 2 * np.pi / df[q_col]  # nm
+        d_values.append(d_col)
+        hkls.append(1/(np.sqrt(h**2 + k**2 + l**2)))
+
+    # Linear regression to get lattice parameter: d = a / sqrt(h^2+k^2+l^2)
+    a_list = []
+    for idx, row in df.iterrows():
+        d_row = pd.to_numeric(row[d_values], errors='coerce').values
+        mask = ~np.isnan(d_row)
+        if np.sum(mask) < 2:
+            a_list.append(np.nan)
+            continue
+        X = np.array([hkls[i] for i, m in enumerate(mask) if m]).reshape(-1, 1)
+        y = np.array([d_row[i] for i, m in enumerate(mask) if m])
+        model = LinearRegression(fit_intercept=False)
+        model.fit(X, y)
+        a_list.append(model.coef_[0])  # slope = a_nm
+
+    df['a_nm_avg'] = a_list
+    df['a_A_avg'] = df['a_nm_avg'] * 10  # convert nm → Å
+
+    # Save Excel output
+    folder_name = os.path.basename(os.path.normpath(folder_path))
+    output_file = os.path.join(folder_path, f"{folder_name}_lattice_parameters.xlsx")
+    df.to_excel(output_file, index=False)
+    print(f"✅ Results saved to {output_file}")
+
+    # Plot
+    plt.figure(figsize=(10, 4))
+    plt.plot(range(len(df)), df['a_A_avg'], marker='o', linestyle='-', color='b')
+    plt.xticks(range(len(df)), df['scan_point'], rotation=90)
+    plt.xlabel('Scan Point')
+    plt.ylabel('Average Lattice Parameter a (Å)')
+    plt.title(f'Average FCC Cu Lattice Parameter - {folder_name}')
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.tight_layout()
+    plt.show()
+
+
+
+# ================= MAIN LOOP =================
+print(f"Processing {len(folder_paths)} folders.")
+for folder_path in folder_paths:
+    print(f"\nProcessing folder: {folder_path}")
+    process_folder(folder_path)
